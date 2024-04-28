@@ -1,2 +1,2 @@
-web: gunicorn frontend.src.app:app
-rates-collector-worker: gunicorn frontend.src.app:app
+web: gunicorn applications.frontend.src.app:app
+rates-collector-worker: gunicorn applications.frontend.src.app:app
