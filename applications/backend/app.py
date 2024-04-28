@@ -2,23 +2,20 @@
 
 import requests
 import sys
+import json
+import pika
+import os
+
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 sys.path.append('../../components')
 from components.rates_db import AnalysisResults
 from components.rates_db import init_db
 
-COMPARABLE_CURRENCIES_ALLOWLIST = [
-    'usd',
-    'eur',
-    'gbp',
-    'chf',
-    'btc',
-]
 
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Rates.sqlite3'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + '/Rates.sqlite3'
 
 db = SQLAlchemy(app)
 
@@ -32,29 +29,24 @@ def get_rates(base_currency, date):
 
 @app.route("/initiate_analysis", methods=["POST"])
 def initiate_analysis():
+    init_db(db)
     base_currency = request.form.get("base_currency", "")
     start_date = request.form.get("start_date", "")
     end_date = request.form.get("end_date", "")
     analysis_id = str(hash(base_currency + "#" + start_date + "#" + end_date))
 
-    rates_from = get_rates(base_currency, start_date)
-    rates_to = get_rates(base_currency, end_date)
-    diff = dict()
-    for k, v in rates_from.items():
-        if k in COMPARABLE_CURRENCIES_ALLOWLIST:
-            diff[k] = (rates_to[k] / rates_from[k] - 1) * 100.
+    conn = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
+    channel = conn.channel()
+    channel.exchange_declare(exchange="incoming-requests-exchange",exchange_type="direct")
+    channel.queue_declare(queue="incoming-requests")
+    channel.basic_publish(exchange="incoming-requests-exchange", routing_key="incoming-requests",
+                          body=json.dumps({
+                              "base_currency": base_currency,
+                              "start_date": start_date,
+                              "end_date": end_date,
+                              "analysis_id": analysis_id,
+                          }))
 
-    with app.app_context():
-        init_db(db)
-        for k, v in diff.items():
-            existing = db.session.query(AnalysisResults).filter_by(
-                id=analysis_id, currency=k, base_currency=base_currency, rate_change_percents=v
-            ).first()
-            if existing:
-                continue
-            entry = AnalysisResults(id=analysis_id, currency=k, base_currency=base_currency, rate_change_percents=v)
-            db.session.add(entry)
-        db.session.commit()
     return '{"analysis_id":"' + analysis_id + '"}'
 
 
@@ -70,6 +62,7 @@ class ResultRow:
 
 @app.route("/get_results", methods=["GET"])
 def get_results():
+    init_db(db)
     analysis_id = request.args.get("analysis_id", "")
     if analysis_id == "":
         raise RuntimeError("no analysis id provided")
