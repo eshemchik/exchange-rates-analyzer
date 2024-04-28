@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from flask import Flask, request
+import requests
+from flask import Flask, request,redirect
 
 app = Flask(__name__)
 
@@ -12,7 +13,7 @@ BASE_CURRENCIES_ALLOWLIST = [
     'btc',
 ]
 
-BACKEND_PATH = 'http://localhost:8081'
+BACKEND_PATH = 'http://127.0.0.1:5001/'
 
 
 @app.route("/")
@@ -39,5 +40,27 @@ def initiate_analysis():
     base_currency = request.form.get("base_currency", "")
     start_date = request.form.get("start_date", "")
     end_date = request.form.get("end_date", "")
+    response = requests.post(BACKEND_PATH + "initiate_analysis", data={
+        "base_currency": base_currency,
+        "start_date": start_date,
+        "end_date": end_date,
+    })
+    analysis_id = response.json()['analysis_id']
+    return redirect(f"/get_results?analysis_id={analysis_id}", code=302)
 
-    return "You entered: " + base_currency + " " + start_date + " " + end_date
+
+@app.route("/get_results", methods=["GET"])
+def get_results():
+    analysis_id = request.args.get("analysis_id", "")
+    response = requests.get(f"{BACKEND_PATH}get_results?analysis_id={analysis_id}")
+    rows = ""
+    for r in response.json()['rows']:
+        if r['currency'] == r['base_currency']:
+            continue
+        rows += f"<tr><td>{r['currency']}/{r['base_currency']}</td><td>{r['rate_change_percents']}</td></tr>"
+    return f'''
+    <table>
+    <tr><th>Currencies pair</th><th>Change(%)</th></tr>
+    {rows}
+    </table>
+    '''

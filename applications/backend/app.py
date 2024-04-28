@@ -65,7 +65,7 @@ class ResultRow:
         self.rate_change_percents = rate_change_percents
 
     def json(self):
-        return '{"base_currency":"'+self.base_currency+'",currency:"'+self.currency+'",rate_change_percents:"'+str(self.rate_change_percents)+'"}'
+        return '{"base_currency":"'+self.base_currency+'","currency":"'+self.currency+'","rate_change_percents":"'+str(self.rate_change_percents)+'"}'
 
 
 @app.route("/get_results", methods=["GET"])
@@ -81,8 +81,8 @@ def get_results():
     resps = []
     for r in result_rows:
         resps.append(r.json())
-    return '[' + ','.join(resps) + ']'
+    return '{"rows":[' + ','.join(resps) + ']}'
 
 
 if __name__ == '__main__':
-    app.run(port=5001, debug=True)
+    app.run(port=5001)
