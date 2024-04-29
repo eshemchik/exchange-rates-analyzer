@@ -8,6 +8,7 @@ import os
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from components.rates_db import RatesDAO
+from prometheus_flask_exporter import PrometheusMetrics
 
 
 app = Flask(__name__)
@@ -15,8 +16,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.abspath(os.path.j
 
 db = SQLAlchemy(app)
 
+metrics = PrometheusMetrics(app, group_by='endpoint')
+
+common_counter = metrics.counter(
+    'by_endpoint_counter', 'Request count by endpoints',
+    labels={'endpoint': lambda: request.endpoint}
+)
+
 
 @app.route("/initiate_analysis", methods=["POST"])
+@common_counter
 def initiate_analysis():
     base_currency = request.form.get("base_currency", "")
     start_date = request.form.get("start_date", "")
@@ -75,8 +84,15 @@ def get_results_impl(dao, analysis_id):
 
 
 @app.route("/get_results", methods=["GET"])
+@common_counter
 def get_results():
     return get_results_impl(dao=RatesDAO(db), analysis_id=request.args.get("analysis_id", ""))
+
+
+@app.route("/health")
+@common_counter
+def health():
+    return "i'm healthy"
 
 
 if __name__ == '__main__':

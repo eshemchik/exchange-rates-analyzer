@@ -2,8 +2,16 @@
 
 import requests
 from flask import Flask, request,redirect
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
+
+metrics = PrometheusMetrics(app, group_by='endpoint')
+
+common_counter = metrics.counter(
+    'by_endpoint_counter', 'Request count by endpoints',
+    labels={'endpoint': lambda: request.endpoint}
+)
 
 BASE_CURRENCIES_ALLOWLIST = [
     'usd',
@@ -17,6 +25,7 @@ BACKEND_PATH = 'http://127.0.0.1:5001/'
 
 
 @app.route("/")
+@common_counter
 def main():
     options = ""
     for cur in BASE_CURRENCIES_ALLOWLIST:
@@ -34,7 +43,9 @@ def main():
      </form>
      '''
 
+
 @app.route("/initiate_analysis", methods=["POST"])
+@common_counter
 def initiate_analysis():
     base_currency = request.form.get("base_currency", "")
     start_date = request.form.get("start_date", "")
@@ -66,10 +77,17 @@ def render_results(backend_response):
 
 
 @app.route("/get_results", methods=["GET"])
+@common_counter
 def get_results():
     analysis_id = request.args.get("analysis_id", "")
     response = requests.get(f"{BACKEND_PATH}get_results?analysis_id={analysis_id}")
     return render_results(response.json())
+
+
+@app.route("/health")
+@common_counter
+def health():
+    return "i'm healthy"
 
 
 if __name__ == '__main__':
