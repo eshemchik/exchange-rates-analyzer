@@ -7,8 +7,7 @@ import os
 
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
-from components.rates_db import AnalysisResults
-from components.rates_db import init_db
+from components.rates_db import RatesDAO
 
 
 app = Flask(__name__)
@@ -16,17 +15,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.abspath(os.path.j
 
 db = SQLAlchemy(app)
 
-
-def get_rates(base_currency, date):
-    app.logger.info(f"Requesting data for '{base_currency}' for date '{date}'")
-    response = requests.get(f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{date}/v1/currencies/{base_currency}.json")
-    app.logger.info("Got response: " + str(response))
-    return response.json()[base_currency]
-
-
 @app.route("/initiate_analysis", methods=["POST"])
 def initiate_analysis():
-    init_db(db)
     base_currency = request.form.get("base_currency", "")
     start_date = request.form.get("start_date", "")
     end_date = request.form.get("end_date", "")
@@ -67,13 +57,11 @@ class ResultRow:
                 +'","rate_change_percents":"'+str(self.rate_change_percents)+'"}')
 
 
-@app.route("/get_results", methods=["GET"])
-def get_results():
-    init_db(db)
+def get_results_impl(dao, request):
     analysis_id = request.args.get("analysis_id", "")
     if analysis_id == "":
         raise RuntimeError("no analysis id provided")
-    results = db.session.query(AnalysisResults).filter_by(id=analysis_id)
+    results = dao.read_analysis_results(analysis_id)
     result_rows = []
     for r in results:
         result_rows.append(ResultRow(
@@ -84,6 +72,11 @@ def get_results():
     for r in result_rows:
         resps.append(r.json())
     return '{"rows":[' + ','.join(resps) + ']}'
+
+
+@app.route("/get_results", methods=["GET"])
+def get_results():
+    return get_results_impl(dao=RatesDAO(db), request=request)
 
 
 if __name__ == '__main__':

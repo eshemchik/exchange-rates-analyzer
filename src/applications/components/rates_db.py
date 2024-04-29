@@ -29,7 +29,36 @@ class AnalysisResults(Base):
     rate_change_percents: Mapped[float] = mapped_column(Float())
 
 
-def init_db(db):
-    # Create table if not exists.
-    Rates.__table__.create(bind=db.engine, checkfirst=True)
-    AnalysisResults.__table__.create(bind=db.engine, checkfirst=True)
+class RatesDAO:
+    def __init__(self, db):
+        self.db = db
+        Rates.__table__.create(bind=db.engine, checkfirst=True)
+        AnalysisResults.__table__.create(bind=db.engine, checkfirst=True)
+
+    def read_analysis_results(self, analysis_id):
+        return self.db.session.query(AnalysisResults).filter_by(id=analysis_id)
+
+    def read_rates(self, base_currency, date):
+        return self.db.session.query(Rates).filter_by(
+            base_currency=base_currency, date=date
+        )
+
+    def write_analysis_results(self, entries):
+        for entry in entries:
+            # clear existing results to override
+            self.db.session.query(AnalysisResults).filter_by(
+                id=entry.id, currency=entry.currency, base_currency=entry.base_currency,
+                rate_change_percents=entry.rate_change_percents
+            ).delete()
+            self.db.session.add(entry)
+        self.db.session.commit()
+
+    def write_rates(self, entries):
+        for entry in entries:
+            # clear existing results to override
+            self.db.session.query(Rates).filter_by(
+                base_currency=entry.base_currency, date=entry.date, currency=entry.currency
+            ).delete()
+            self.db.session.add(entry)
+        self.db.session.commit()
+

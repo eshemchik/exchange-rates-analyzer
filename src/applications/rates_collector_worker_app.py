@@ -10,8 +10,7 @@ import traceback
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from components.rates_db import Rates
-from components.rates_db import init_db
+from components.rates_db import RatesDAO, Rates
 
 COMPARABLE_CURRENCIES_ALLOWLIST = [
     'usd',
@@ -33,26 +32,21 @@ def get_rates(base_currency, date):
     return response.json()[base_currency]
 
 
-def request_and_store_data(base_currency, date):
+def request_and_store_data(dao, base_currency, date):
     rates = get_rates(base_currency, date)
+    entries = []
     for k, v in rates.items():
         if k not in COMPARABLE_CURRENCIES_ALLOWLIST:
             continue
-        # clear existing results to override
-        existing = db.session.query(Rates).filter_by(
-            base_currency=base_currency, date=date, currency=k
-        ).delete()
-        entry = Rates(base_currency=base_currency, date=date, currency=k, rate=1/v)
-        db.session.add(entry)
-    db.session.commit()
-
+        entries.append(Rates(base_currency=base_currency, date=date, currency=k, rate=1/v))
+    dao.write_rates(entries)
 
 def process_request(request):
     print("Processing collecting request: " + str(request))
     with app.app_context():
-        init_db(db)
-        request_and_store_data(request['base_currency'], request['start_date'])
-        request_and_store_data(request['base_currency'], request['end_date'])
+        dao = RatesDAO(db)
+        request_and_store_data(dao, request['base_currency'], request['start_date'])
+        request_and_store_data(dao, request['base_currency'], request['end_date'])
     conn = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
     channel = conn.channel()
     channel.exchange_declare(exchange="analyze-requests-exchange",exchange_type="direct")
@@ -76,7 +70,8 @@ def main():
     def callback(ch, method, properties, body):
         try:
             body = json.loads(body)
-            process_request(body)
+            with app.app_context():
+                process_request(body)
         except Exception:
             traceback.print_exc()
     channel.basic_consume(queue='incoming-requests', on_message_callback=callback, auto_ack=True)

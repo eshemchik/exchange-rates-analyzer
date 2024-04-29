@@ -10,9 +10,7 @@ import traceback
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from components.rates_db import Rates
-from components.rates_db import AnalysisResults
-from components.rates_db import init_db
+from components.rates_db import RatesDAO, AnalysisResults
 
 
 COMPARABLE_CURRENCIES_ALLOWLIST = [
@@ -35,29 +33,13 @@ def get_rates(base_currency, date):
     return response.json()[base_currency]
 
 
-def request_and_store_data(base_currency, date):
-    rates = get_rates(base_currency, date)
-    for k, v in rates.items():
-        if k not in COMPARABLE_CURRENCIES_ALLOWLIST:
-            continue
-        existing = db.session.query(Rates).filter_by(
-            base_currency=base_currency, date=date, currency=k
-        ).first()
-        if existing:
-            continue
-        entry = Rates(base_currency=base_currency, date=date, currency=k, rate=v)
-        db.session.add(entry)
-    db.session.commit()
-
-
-def process_request(request):
+def process_request(request, dao):
     print("Processing analyze request: " + str(request))
     with app.app_context():
-        init_db(db)
-        start_rates_entries = db.session.query(Rates).filter_by(
+        start_rates_entries = dao.read_rates(
             base_currency=request['base_currency'], date=request['start_date']
         )
-        end_rates_entries = db.session.query(Rates).filter_by(
+        end_rates_entries = dao.read_rates(
             base_currency=request['base_currency'], date=request['end_date']
         )
         rates_from = dict()
@@ -70,25 +52,18 @@ def process_request(request):
         for k, v in rates_from.items():
             if k in COMPARABLE_CURRENCIES_ALLOWLIST:
                 diff[k] = (rates_to[k] / rates_from[k] - 1) * 100.
-        with app.app_context():
-            init_db(db)
-            for k, v in diff.items():
-                # clear existing results to override
-                db.session.query(AnalysisResults).filter_by(
-                    id=request['analysis_id'], currency=k, base_currency=request['base_currency'], rate_change_percents=v
-                ).delete()
-                entry = AnalysisResults(
-                    id=request['analysis_id'],
-                    currency=k,
-                    base_currency=request['base_currency'],
-                    start_date=request['start_date'],
-                    end_date=request['end_date'],
-                    start_rate=rates_from[k],
-                    end_rate=rates_to[k],
-                    rate_change_percents=v,
-                )
-                db.session.add(entry)
-            db.session.commit()
+        entries = []
+        for k, v in diff.items():
+            entries.append(AnalysisResults(
+                id=request['analysis_id'],
+                currency=k,
+                base_currency=request['base_currency'],
+                start_date=request['start_date'],
+                end_date=request['end_date'],
+                start_rate=rates_from[k],
+                end_rate=rates_to[k],
+                rate_change_percents=v))
+        dao.write_analysis_results(entries)
     print("Processed analyze request: " + str(request))
 
 
@@ -101,7 +76,8 @@ def main():
     def callback(ch, method, properties, body):
         try:
             body = json.loads(body)
-            process_request(body)
+            with app.app_context():
+                process_request(body, dao=RatesDAO(db))
         except Exception:
             traceback.print_exc()
     channel.basic_consume(queue='analyze-requests', on_message_callback=callback, auto_ack=True)
