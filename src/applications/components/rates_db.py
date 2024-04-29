@@ -22,7 +22,11 @@ class AnalysisResults(Base):
     id: Mapped[str] = mapped_column(String(20), primary_key=True)
     currency: Mapped[str] = mapped_column(String(20), primary_key=True)
     base_currency: Mapped[str] = mapped_column(String(20))
-    rate_change_percents: Mapped[float] = mapped_column(Float)
+    start_date: Mapped[str] = mapped_column(String(20))
+    end_date: Mapped[str] = mapped_column(String(20))
+    start_rate: Mapped[float] = mapped_column(Float())
+    end_rate: Mapped[float] = mapped_column(Float())
+    rate_change_percents: Mapped[float] = mapped_column(Float())
 
 
 def init_db(db):

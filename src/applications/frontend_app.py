@@ -54,13 +54,16 @@ def get_results():
     analysis_id = request.args.get("analysis_id", "")
     response = requests.get(f"{BACKEND_PATH}get_results?analysis_id={analysis_id}")
     rows = ""
+    start_date = response.json()['rows'][0]['start_date']
+    end_date = response.json()['rows'][0]['end_date']
     for r in response.json()['rows']:
         if r['currency'] == r['base_currency']:
             continue
-        rows += f"<tr><td>{r['currency']}/{r['base_currency']}</td><td>{r['rate_change_percents']}</td></tr>"
+        rows += f"<tr><td>{r['currency']}/{r['base_currency']}</td><td>{r['start_rate']}</td><td>{r['end_rate']}</td><td>{r['rate_change_percents']}</td></tr>"
     return f'''
+    If no results shown, please refresh the page in a couple of seconds.
     <table>
-    <tr><th>Currencies pair</th><th>Change(%)</th></tr>
+    <tr><th>Currencies pair</th><th>{start_date}</th><th>{end_date}</th><th>Change(%)</th></tr>
     {rows}
     </table>
     '''

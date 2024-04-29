@@ -38,12 +38,11 @@ def request_and_store_data(base_currency, date):
     for k, v in rates.items():
         if k not in COMPARABLE_CURRENCIES_ALLOWLIST:
             continue
+        # clear existing results to override
         existing = db.session.query(Rates).filter_by(
             base_currency=base_currency, date=date, currency=k
-        ).first()
-        if existing:
-            continue
-        entry = Rates(base_currency=base_currency, date=date, currency=k, rate=v)
+        ).delete()
+        entry = Rates(base_currency=base_currency, date=date, currency=k, rate=1/v)
         db.session.add(entry)
     db.session.commit()
 
@@ -78,7 +77,7 @@ def main():
         try:
             body = json.loads(body)
             process_request(body)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
     channel.basic_consume(queue='incoming-requests', on_message_callback=callback, auto_ack=True)
     print(' [*] Waiting for messages. To exit press CTRL+C')

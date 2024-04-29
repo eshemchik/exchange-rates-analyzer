@@ -48,13 +48,23 @@ def initiate_analysis():
 
 
 class ResultRow:
-    def __init__(self, base_currency, currency, rate_change_percents):
+    def __init__(self, base_currency, currency, start_date, end_date, start_rate, end_rate, rate_change_percents):
         self.base_currency = base_currency
         self.currency = currency
+        self.start_date = start_date
+        self.end_date = end_date
+        self.start_rate = start_rate
+        self.end_rate = end_rate
         self.rate_change_percents = rate_change_percents
 
     def json(self):
-        return '{"base_currency":"'+self.base_currency+'","currency":"'+self.currency+'","rate_change_percents":"'+str(self.rate_change_percents)+'"}'
+        return ('{"base_currency":"'+self.base_currency
+                +'","currency":"'+self.currency
+                +'","start_date":"'+self.start_date
+                +'","end_date":"'+self.end_date
+                +'","start_rate":"'+str(self.start_rate)
+                +'","end_rate":"'+str(self.end_rate)
+                +'","rate_change_percents":"'+str(self.rate_change_percents)+'"}')
 
 
 @app.route("/get_results", methods=["GET"])
@@ -66,7 +76,9 @@ def get_results():
     results = db.session.query(AnalysisResults).filter_by(id=analysis_id)
     result_rows = []
     for r in results:
-        result_rows.append(ResultRow(r.base_currency, r.currency, r.rate_change_percents))
+        result_rows.append(ResultRow(
+            r.base_currency, r.currency, r.start_date, r.end_date, r.start_rate, r.end_rate, r.rate_change_percents
+        ))
     result_rows.sort(key=lambda x: x.rate_change_percents)
     resps = []
     for r in result_rows:

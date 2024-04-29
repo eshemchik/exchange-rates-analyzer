@@ -77,7 +77,16 @@ def process_request(request):
                 db.session.query(AnalysisResults).filter_by(
                     id=request['analysis_id'], currency=k, base_currency=request['base_currency'], rate_change_percents=v
                 ).delete()
-                entry = AnalysisResults(id=request['analysis_id'], currency=k, base_currency=request['base_currency'], rate_change_percents=v)
+                entry = AnalysisResults(
+                    id=request['analysis_id'],
+                    currency=k,
+                    base_currency=request['base_currency'],
+                    start_date=request['start_date'],
+                    end_date=request['end_date'],
+                    start_rate=rates_from[k],
+                    end_rate=rates_to[k],
+                    rate_change_percents=v,
+                )
                 db.session.add(entry)
             db.session.commit()
     print("Processed analyze request: " + str(request))
@@ -93,7 +102,7 @@ def main():
         try:
             body = json.loads(body)
             process_request(body)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
     channel.basic_consume(queue='analyze-requests', on_message_callback=callback, auto_ack=True)
     print(' [*] Waiting for messages. To exit press CTRL+C')
