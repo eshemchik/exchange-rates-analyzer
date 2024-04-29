@@ -50,8 +50,11 @@ def process_request(request, dao):
             rates_to[entry.currency] = entry.rate
         diff = dict()
         for k, v in rates_from.items():
-            if k in COMPARABLE_CURRENCIES_ALLOWLIST:
-                diff[k] = (rates_to[k] / rates_from[k] - 1) * 100.
+            if k not in COMPARABLE_CURRENCIES_ALLOWLIST:
+                continue
+            if k not in rates_to:
+                continue
+            diff[k] = (rates_to[k] / rates_from[k] - 1) * 100.
         entries = []
         for k, v in diff.items():
             entries.append(AnalysisResults(

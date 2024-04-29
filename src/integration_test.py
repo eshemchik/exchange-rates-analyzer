@@ -41,6 +41,7 @@ if __name__ == '__main__':
     '''
         print("Got response: '" + results_response.text + "'")
         assert want_response == results_response.text, "Results should not differ from the baseline"
+        print("TEST SUCCEDED")
     finally:
         print("Terminating applications...")
         rates_analyzer.terminate()

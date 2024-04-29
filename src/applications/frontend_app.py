@@ -34,7 +34,6 @@ def main():
      </form>
      '''
 
-
 @app.route("/initiate_analysis", methods=["POST"])
 def initiate_analysis():
     base_currency = request.form.get("base_currency", "")
@@ -49,14 +48,11 @@ def initiate_analysis():
     return redirect(f"/get_results?analysis_id={analysis_id}", code=302)
 
 
-@app.route("/get_results", methods=["GET"])
-def get_results():
-    analysis_id = request.args.get("analysis_id", "")
-    response = requests.get(f"{BACKEND_PATH}get_results?analysis_id={analysis_id}")
+def render_results(backend_response):
     rows = ""
-    start_date = response.json()['rows'][0]['start_date']
-    end_date = response.json()['rows'][0]['end_date']
-    for r in response.json()['rows']:
+    start_date = backend_response['rows'][0]['start_date']
+    end_date = backend_response['rows'][0]['end_date']
+    for r in backend_response['rows']:
         if r['currency'] == r['base_currency']:
             continue
         rows += f"<tr><td>{r['currency']}/{r['base_currency']}</td><td>{r['start_rate']}</td><td>{r['end_rate']}</td><td>{r['rate_change_percents']}</td></tr>"
@@ -67,6 +63,13 @@ def get_results():
     {rows}
     </table>
     '''
+
+
+@app.route("/get_results", methods=["GET"])
+def get_results():
+    analysis_id = request.args.get("analysis_id", "")
+    response = requests.get(f"{BACKEND_PATH}get_results?analysis_id={analysis_id}")
+    return render_results(response.json())
 
 
 if __name__ == '__main__':

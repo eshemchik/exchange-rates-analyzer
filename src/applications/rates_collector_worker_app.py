@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 
-import requests
 import sys
 import pika
 import os
@@ -11,6 +10,7 @@ import traceback
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from components.rates_db import RatesDAO, Rates
+from components.rates_reader import RatesReader
 
 COMPARABLE_CURRENCIES_ALLOWLIST = [
     'usd',
@@ -27,13 +27,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.abspath(os.path.j
 db = SQLAlchemy(app)
 
 
-def get_rates(base_currency, date):
-    response = requests.get(f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{date}/v1/currencies/{base_currency}.json")
-    return response.json()[base_currency]
-
-
-def request_and_store_data(dao, base_currency, date):
-    rates = get_rates(base_currency, date)
+def request_and_store_data(dao, rates_reader, base_currency, date):
+    rates = rates_reader.get_rates(base_currency, date)
     entries = []
     for k, v in rates.items():
         if k not in COMPARABLE_CURRENCIES_ALLOWLIST:
@@ -41,12 +36,11 @@ def request_and_store_data(dao, base_currency, date):
         entries.append(Rates(base_currency=base_currency, date=date, currency=k, rate=1/v))
     dao.write_rates(entries)
 
-def process_request(request):
+
+def process_request(request, dao, rates_reader):
     print("Processing collecting request: " + str(request))
-    with app.app_context():
-        dao = RatesDAO(db)
-        request_and_store_data(dao, request['base_currency'], request['start_date'])
-        request_and_store_data(dao, request['base_currency'], request['end_date'])
+    request_and_store_data(dao, rates_reader, request['base_currency'], request['start_date'])
+    request_and_store_data(dao, rates_reader, request['base_currency'], request['end_date'])
     conn = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
     channel = conn.channel()
     channel.exchange_declare(exchange="analyze-requests-exchange",exchange_type="direct")
@@ -71,7 +65,7 @@ def main():
         try:
             body = json.loads(body)
             with app.app_context():
-                process_request(body)
+                process_request(body, RatesDAO(db), RatesReader())
         except Exception:
             traceback.print_exc()
     channel.basic_consume(queue='incoming-requests', on_message_callback=callback, auto_ack=True)

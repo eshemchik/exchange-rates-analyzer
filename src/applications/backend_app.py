@@ -15,6 +15,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.abspath(os.path.j
 
 db = SQLAlchemy(app)
 
+
 @app.route("/initiate_analysis", methods=["POST"])
 def initiate_analysis():
     base_currency = request.form.get("base_currency", "")
@@ -57,8 +58,7 @@ class ResultRow:
                 +'","rate_change_percents":"'+str(self.rate_change_percents)+'"}')
 
 
-def get_results_impl(dao, request):
-    analysis_id = request.args.get("analysis_id", "")
+def get_results_impl(dao, analysis_id):
     if analysis_id == "":
         raise RuntimeError("no analysis id provided")
     results = dao.read_analysis_results(analysis_id)
@@ -76,7 +76,7 @@ def get_results_impl(dao, request):
 
 @app.route("/get_results", methods=["GET"])
 def get_results():
-    return get_results_impl(dao=RatesDAO(db), request=request)
+    return get_results_impl(dao=RatesDAO(db), analysis_id=request.args.get("analysis_id", ""))
 
 
 if __name__ == '__main__':
