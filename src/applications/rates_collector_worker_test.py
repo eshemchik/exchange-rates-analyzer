@@ -5,7 +5,7 @@ import unittest
 from components.rates_db_fake import FakeRatesDAO
 from components.rates_reader_fake import FakeRatesReader
 from components.rates_db import Rates
-from rates_collector_worker_app import process_request
+from rates_collector_worker_app import process_request_impl
 
 
 class TestRatesCollector(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestRatesCollector(unittest.TestCase):
               "end_date": "2024-04-02",
               "analysis_id": "1",
         })
-        process_request(req, dao, rates_reader)
+        process_request_impl(req, dao, rates_reader)
         got_rates = dao.read_rates(base_currency="usd", date="2024-04-01")
         self.assertEquals(len(rates), len(got_rates), "Returned rates count is wrong")
 

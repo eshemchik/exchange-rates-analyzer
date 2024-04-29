@@ -37,10 +37,14 @@ def request_and_store_data(dao, rates_reader, base_currency, date):
     dao.write_rates(entries)
 
 
-def process_request(request, dao, rates_reader):
-    print("Processing collecting request: " + str(request))
+def process_request_impl(request, dao, rates_reader):
     request_and_store_data(dao, rates_reader, request['base_currency'], request['start_date'])
     request_and_store_data(dao, rates_reader, request['base_currency'], request['end_date'])
+
+
+def process_request(request, dao, rates_reader):
+    print("Processing collecting request: " + str(request))
+    process_request_impl(request, dao, rates_reader)
     conn = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
     channel = conn.channel()
     channel.exchange_declare(exchange="analyze-requests-exchange",exchange_type="direct")
