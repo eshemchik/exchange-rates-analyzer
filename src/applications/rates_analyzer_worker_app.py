@@ -10,9 +10,10 @@ import traceback
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-sys.path.append('../../components')
 from components.rates_db import Rates
+from components.rates_db import AnalysisResults
 from components.rates_db import init_db
+
 
 COMPARABLE_CURRENCIES_ALLOWLIST = [
     'usd',
@@ -50,37 +51,51 @@ def request_and_store_data(base_currency, date):
 
 
 def process_request(request):
-    print("Processing request: " + str(request))
+    print("Processing analyze request: " + str(request))
     with app.app_context():
         init_db(db)
-        request_and_store_data(request['base_currency'], request['start_date'])
-        request_and_store_data(request['base_currency'], request['end_date'])
-    conn = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
-    channel = conn.channel()
-    channel.exchange_declare(exchange="analyze-requests-exchange",exchange_type="direct")
-    channel.queue_declare(queue="analyze-requests")
-    channel.basic_publish(exchange="analyze-requests-exchange", routing_key="analyze-requests",
-                          body=json.dumps({
-                              "base_currency": request['base_currency'],
-                              "start_date": request['start_date'],
-                              "end_date": request['end_date'],
-                              "analysis_id": request['analysis_id'],
-                              }))
+        start_rates_entries = db.session.query(Rates).filter_by(
+            base_currency=request['base_currency'], date=request['start_date']
+        )
+        end_rates_entries = db.session.query(Rates).filter_by(
+            base_currency=request['base_currency'], date=request['end_date']
+        )
+        rates_from = dict()
+        for entry in start_rates_entries:
+            rates_from[entry.currency] = entry.rate
+        rates_to = dict()
+        for entry in end_rates_entries:
+            rates_to[entry.currency] = entry.rate
+        diff = dict()
+        for k, v in rates_from.items():
+            if k in COMPARABLE_CURRENCIES_ALLOWLIST:
+                diff[k] = (rates_to[k] / rates_from[k] - 1) * 100.
+        with app.app_context():
+            init_db(db)
+            for k, v in diff.items():
+                # clear existing results to override
+                db.session.query(AnalysisResults).filter_by(
+                    id=request['analysis_id'], currency=k, base_currency=request['base_currency'], rate_change_percents=v
+                ).delete()
+                entry = AnalysisResults(id=request['analysis_id'], currency=k, base_currency=request['base_currency'], rate_change_percents=v)
+                db.session.add(entry)
+            db.session.commit()
+    print("Processed analyze request: " + str(request))
 
 
 def main():
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     channel = connection.channel()
-    channel.exchange_declare(exchange="incoming-requests-exchange",exchange_type="direct")
-    channel.queue_declare(queue="incoming-requests")
-    channel.queue_bind(exchange="incoming-requests-exchange", queue="incoming-requests", routing_key="incoming-requests")
+    channel.exchange_declare(exchange="analyze-requests-exchange",exchange_type="direct")
+    channel.queue_declare(queue="analyze-requests")
+    channel.queue_bind(exchange="analyze-requests-exchange", queue="analyze-requests", routing_key="analyze-requests")
     def callback(ch, method, properties, body):
         try:
             body = json.loads(body)
             process_request(body)
         except Exception as e:
             traceback.print_exc()
-    channel.basic_consume(queue='incoming-requests', on_message_callback=callback, auto_ack=True)
+    channel.basic_consume(queue='analyze-requests', on_message_callback=callback, auto_ack=True)
     print(' [*] Waiting for messages. To exit press CTRL+C')
     channel.start_consuming()
 

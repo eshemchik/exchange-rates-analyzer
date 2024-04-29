@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 
 import requests
-import sys
 import json
 import pika
 import os
 
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
-sys.path.append('../../components')
 from components.rates_db import AnalysisResults
 from components.rates_db import init_db
-
 
 
 app = Flask(__name__)
